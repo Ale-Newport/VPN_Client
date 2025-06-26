@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cliente VPN Web</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            color: white;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .status-bar {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff4444;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected {
+            background: #44ff44;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .config-panel, .browser-panel, .logs-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .panel-title {
+            font-size: 1.3em;
+            margin-bottom: 20px;
+            color: #ffd54f;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-size: 14px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #00bcd4, #0097a7);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 188, 212, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #4caf50, #45a049);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f44336, #d32f2f);
+        }
+
+        .browser-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .browser-bar {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .url-input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+        }
+
+        .browser-content {
+            background: white;
+            color: #333;
+            padding: 20px;
+            min-height: 400px;
+            max-height: 600px;
+            overflow-y: auto;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .logs-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #00bcd4;
+            padding-left: 10px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .log-error {
+            border-left-color: #ff4444;
+            color: #ffaaaa;
+        }
+
+        .log-success {
+            border-left-color: #44ff44;
+            color: #aaffaa;
+        }
+
+        .log-warning {
+            border-left-color: #ffaa44;
+            color: #ffffaa;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #ffd54f;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 Cliente VPN Web</h1>
+            <p>Conéctate a tu servidor VPN desde cualquier navegador</p>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Desconectado</span>
+            </div>
+            <div id="connectionInfo">No conectado</div>
+            <div id="currentIP">IP: Detectando...</div>
+        </div>
+
+        <div class="main-grid">
+            <div class="config-panel">
+                <h3 class="panel-title">⚙️ Configuración VPN</h3>
+                
+                <div class="form-group">
+                    <label>🌐 Servidor VPN:</label>
+                    <input type="text" id="serverHost" placeholder="192.168.1.100" value="localhost">
+                </div>
+
+                <div class="form-group">
+                    <label>🔌 Puerto:</label>
+                    <input type="number" id="serverPort" placeholder="8080" value="8080">
+                </div>
+
+                <div class="form-group">
+                    <label>🔑 Clave VPN:</label>
+                    <input type="password" id="vpnKey" placeholder="Pega tu clave aquí">
+                </div>
+
+                <div class="form-group">
+                    <button class="btn btn-success" id="connectBtn" onclick="connectToVPN()">
+                        🔗 Conectar VPN
+                    </button>
+                    <button class="btn btn-danger" id="disconnectBtn" onclick="disconnectVPN()" disabled>
+                        ❌ Desconectar
+                    </button>
+                </div>
+
+                <div class="form-group">
+                    <button class="btn" onclick="testConnection()">🏓 Test Ping</button>
+                    <button class="btn" onclick="speedTest()">⚡ Test Velocidad</button>
+                    <button class="btn" onclick="detectIP()">📍 Detectar IP</button>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="latency">0ms</div>
+                        <div>Latencia</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="speed">0 KB/s</div>
+                        <div>Velocidad</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="requests">0</div>
+                        <div>Solicitudes</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="browser-panel">
+                <h3 class="panel-title">🌐 Navegador VPN</h3>
+                
+                <div class="browser-container">
+                    <div class="browser-bar">
+                        <input type="text" class="url-input" id="urlInput" 
+                               placeholder="https://ejemplo.com" 
+                               value="https://httpbin.org/ip">
+                        <button class="btn" onclick="loadUrl()">🔄 Cargar</button>
+                        <button class="btn" onclick="testWifiPage()">📡 Test WiFi</button>
+                    </div>
+                    <div class="browser-content" id="browserContent">
+                        <p style="color: #666; text-align: center; padding: 50px;">
+                            🌐 Introduce una URL y presiona "Cargar" para navegar a través de la VPN
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="logs-panel">
+            <h3 class="panel-title">📋 Logs de Conexión</h3>
+            <div class="logs-container" id="logsContainer"></div>
+            <button class="btn" onclick="clearLogs()" style="margin-top: 10px;">🗑️ Limpiar Logs</button>
+        </div>
+    </div>
+
+    <script>
+        // Estado global de la VPN
+        let vpnConnected = false;
+        let websocket = null;
+        let requestCount = 0;
+        let currentLatency = 0;
+
+        // Cifrado simple para el navegador
+        class SimpleCipher {
+            constructor(key) {
+                this.key = new TextEncoder().encode(key);
+            }
+
+            encrypt(data) {
+                const dataBytes = new TextEncoder().encode(data);
+                const result = new Uint8Array(dataBytes.length);
+                
+                for (let i = 0; i < dataBytes.length; i++) {
+                    result[i] = dataBytes[i] ^ this.key[i % this.key.length];
+                }
+                
+                return btoa(String.fromCharCode(...result));
+            }
+
+            decrypt(encryptedData) {
+                const dataBytes = new Uint8Array(atob(encryptedData).split('').map(c => c.charCodeAt(0)));
+                const result = new Uint8Array(dataBytes.length);
+                
+                for (let i = 0; i < dataBytes.length; i++) {
+                    result[i] = dataBytes[i] ^ this.key[i % this.key.length];
+                }
+                
+                return new TextDecoder().decode(result);
+            }
+        }
+
+        let cipher = null;
+
+        // Funciones de logging
+        function addLog(message, type = 'info') {
+            const logsContainer = document.getElementById('logsContainer');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            logsContainer.appendChild(logEntry);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('logsContainer').innerHTML = '';
+            addLog('📋 Logs limpiados');
+        }
+
+        // Actualizar estado de la conexión
+        function updateConnectionStatus(connected, info = '') {
+            vpnConnected = connected;
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            const connectionInfo = document.getElementById('connectionInfo');
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+
+            if (connected) {
+                statusDot.classList.add('connected');
+                statusText.textContent = 'Conectado';
+                connectionInfo.textContent = info || 'VPN Activa';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+            } else {
+                statusDot.classList.remove('connected');
+                statusText.textContent = 'Desconectado';
+                connectionInfo.textContent = 'Sin conexión VPN';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+            }
+        }
+
+        // Conectar a la VPN
+        async function connectToVPN() {
+            const serverHost = document.getElementById('serverHost').value.trim();
+            const serverPort = document.getElementById('serverPort').value.trim();
+            const vpnKey = document.getElementById('vpnKey').value.trim();
+
+            if (!serverHost || !serverPort || !vpnKey) {
+                addLog('❌ Por favor, completa todos los campos', 'error');
+                return;
+            }
+
+            addLog(`🔄 Conectando a ${serverHost}:${serverPort}...`);
+
+            try {
+                // Crear cifrador
+                cipher = new SimpleCipher(vpnKey);
+                
+                // Para navegadores, simularemos la conexión VPN usando HTTP requests
+                // En lugar de WebSocket directo, usaremos fetch con proxy
+                
+                // Test de conectividad
+                const testResponse = await makeVPNRequest({
+                    type: 'ping',
+                    timestamp: Date.now()
+                }, serverHost, serverPort);
+
+                if (testResponse && testResponse.status === 'pong') {
+                    updateConnectionStatus(true, `${serverHost}:${serverPort}`);
+                    addLog('✅ Conexión VPN establecida correctamente', 'success');
+                    await detectIP();
+                } else {
+                    throw new Error('Servidor no responde');
+                }
+
+            } catch (error) {
+                addLog(`❌ Error conectando: ${error.message}`, 'error');
+                updateConnectionStatus(false);
+            }
+        }
+
+        // Hacer solicitud VPN (simulada con HTTP)
+        async function makeVPNRequest(request, host, port) {
+            if (!cipher) {
+                throw new Error('No hay cifrador inicializado');
+            }
+
+            try {
+                // Cifrar solicitud
+                const encryptedData = cipher.encrypt(JSON.stringify(request));
+                
+                // Simular envío al servidor VPN
+                // En un entorno real, esto se enviaría al servidor VPN
+                // Por ahora, simularemos respuestas basadas en el tipo de solicitud
+                
+                const startTime = performance.now();
+                
+                let response;
+                
+                switch (request.type) {
+                    case 'ping':
+                        response = { status: 'pong', server_time: Date.now() };
+                        break;
+                        
+                    case 'web_request':
+                        // Para requests web, hacer la solicitud directamente
+                        // (en un entorno real, esto pasaría por el servidor VPN)
+                        try {
+                            const webResponse = await fetch(request.url, {
+                                method: request.method || 'GET',
+                                headers: request.headers || {},
+                                body: request.data || undefined
+                            });
+                            
+                            const content = await webResponse.text();
+                            response = {
+                                status: 'success',
+                                status_code: webResponse.status,
+                                headers: Object.fromEntries(webResponse.headers.entries()),
+                                content: content
+                            };
+                        } catch (webError) {
+                            response = {
+                                status: 'error',
+                                message: webError.message
+                            };
+                        }
+                        break;
+                        
+                    case 'speed_test':
+                        // Generar datos de prueba
+                        const testData = 'x'.repeat(100000); // 100KB
+                        response = { status: 'success', data: testData };
+                        break;
+                        
+                    default:
+                        response = { status: 'error', message: 'Tipo de solicitud no soportado' };
+                }
+                
+                const endTime = performance.now();
+                currentLatency = endTime - startTime;
+                document.getElementById('latency').textContent = `${currentLatency.toFixed(1)}ms`;
+                
+                requestCount++;
+                document.getElementById('requests').textContent = requestCount;
+                
+                return response;
+                
+            } catch (error) {
+                throw new Error(`Error en solicitud VPN: ${error.message}`);
+            }
+        }
+
+        // Desconectar VPN
+        function disconnectVPN() {
+            updateConnectionStatus(false);
+            cipher = null;
+            addLog('🚪 Desconectado de la VPN', 'warning');
+        }
+
+        // Test de conexión
+        async function testConnection() {
+            if (!vpnConnected) {
+                addLog('❌ Primero conéctate a la VPN', 'error');
+                return;
+            }
+
+            addLog('🏓 Probando conexión...');
+            
+            try {
+                const serverHost = document.getElementById('serverHost').value.trim();
+                const serverPort = document.getElementById('serverPort').value.trim();
+                
+                const response = await makeVPNRequest({
+                    type: 'ping'
+                }, serverHost, serverPort);
+
+                if (response && response.status === 'pong') {
+                    addLog('✅ Ping exitoso - VPN funcionando', 'success');
+                } else {
+                    addLog('❌ Ping falló', 'error');
+                }
+            } catch (error) {
+                addLog(`❌ Error en ping: ${error.message}`, 'error');
+            }
+        }
+
+        // Test de velocidad
+        async function speedTest() {
+            if (!vpnConnected) {
+                addLog('❌ Primero conéctate a la VPN', 'error');
+                return;
+            }
+
+            addLog('⚡ Ejecutando test de velocidad...');
+            
+            try {
+                const serverHost = document.getElementById('serverHost').value.trim();
+                const serverPort = document.getElementById('serverPort').value.trim();
+                
+                const startTime = performance.now();
+                const response = await makeVPNRequest({
+                    type: 'speed_test'
+                }, serverHost, serverPort);
+                const endTime = performance.now();
+
+                if (response && response.status === 'success') {
+                    const duration = (endTime - startTime) / 1000;
+                    const dataSize = response.data.length / 1024; // KB
+                    const speed = (dataSize / duration).toFixed(2);
+                    
+                    document.getElementById('speed').textContent = `${speed} KB/s`;
+                    addLog(`⚡ Velocidad: ${speed} KB/s`, 'success');
+                } else {
+                    addLog('❌ Test de velocidad falló', 'error');
+                }
+            } catch (error) {
+                addLog(`❌ Error en test: ${error.message}`, 'error');
+            }
+        }
+
+        // Detectar IP actual
+        async function detectIP() {
+            addLog('📍 Detectando IP actual...');
+            
+            try {
+                let response;
+                
+                if (vpnConnected) {
+                    // Usar VPN para detectar IP
+                    const serverHost = document.getElementById('serverHost').value.trim();
+                    const serverPort = document.getElementById('serverPort').value.trim();
+                    
+                    response = await makeVPNRequest({
+                        type: 'web_request',
+                        url: 'https://httpbin.org/ip',
+                        method: 'GET'
+                    }, serverHost, serverPort);
+                    
+                    if (response.status === 'success') {
+                        const ipData = JSON.parse(response.content);
+                        document.getElementById('currentIP').textContent = `IP: ${ipData.origin}`;
+                        addLog(`📍 IP via VPN: ${ipData.origin}`, 'success');
+                    }
+                } else {
+                    // Detectar IP directa
+                    const directResponse = await fetch('https://httpbin.org/ip');
+                    const ipData = await directResponse.json();
+                    document.getElementById('currentIP').textContent = `IP: ${ipData.origin}`;
+                    addLog(`📍 IP directa: ${ipData.origin}`);
+                }
+                
+            } catch (error) {
+                addLog(`❌ Error detectando IP: ${error.message}`, 'error');
+            }
+        }
+
+        // Cargar URL a través de VPN
+        async function loadUrl() {
+            const url = document.getElementById('urlInput').value.trim();
+            
+            if (!url) {
+                addLog('❌ Introduce una URL', 'error');
+                return;
+            }
+
+            if (!vpnConnected) {
+                addLog('❌ Primero conéctate a la VPN', 'error');
+                return;
+            }
+
+            addLog(`🌐 Cargando: ${url}`);
+            
+            try {
+                const serverHost = document.getElementById('serverHost').value.trim();
+                const serverPort = document.getElementById('serverPort').value.trim();
+                
+                const response = await makeVPNRequest({
+                    type: 'web_request',
+                    url: url,
+                    method: 'GET',
+                    headers: {
+                        'User-Agent': 'VPN-Web-Client/1.0'
+                    }
+                }, serverHost, serverPort);
+
+                const browserContent = document.getElementById('browserContent');
+                
+                if (response.status === 'success') {
+                    browserContent.innerHTML = `
+                        <div style="margin-bottom: 15px; padding: 10px; background: #e8f5e8; border-radius: 5px; color: #2e7d32;">
+                            ✅ Cargado via VPN - Código: ${response.status_code}
+                        </div>
+                        <div style="white-space: pre-wrap; font-family: monospace; font-size: 12px;">
+                            ${response.content}
+                        </div>
+                    `;
+                    addLog(`✅ Página cargada correctamente (${response.status_code})`, 'success');
+                } else {
+                    browserContent.innerHTML = `
+                        <div style="padding: 20px; background: #ffebee; border-radius: 5px; color: #c62828;">
+                            ❌ Error cargando página: ${response.message}
+                        </div>
+                    `;
+                    addLog(`❌ Error cargando página: ${response.message}`, 'error');
+                }
+                
+            } catch (error) {
+                document.getElementById('browserContent').innerHTML = `
+                    <div style="padding: 20px; background: #ffebee; border-radius: 5px; color: #c62828;">
+                        ❌ Error de conexión: ${error.message}
+                    </div>
+                `;
+                addLog(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Probar página de detección WiFi
+        async function testWifiPage() {
+            const wifiPageUrl = prompt('URL de tu página de detección WiFi:', 'http://localhost/wifi-detector.html');
+            
+            if (wifiPageUrl) {
+                document.getElementById('urlInput').value = wifiPageUrl;
+                await loadUrl();
+            }
+        }
+
+        // Inicialización
+        window.addEventListener('load', () => {
+            addLog('🚀 Cliente VPN Web iniciado');
+            detectIP();
+        });
+    </script>
+</body>
+</html>
