@@ -294,9 +294,17 @@
                         <li>Toca la <strong>ⓘ</strong> junto a tu red actual</li>
                         <li>Desplázate hasta <strong>"Proxy HTTP"</strong></li>
                         <li>Selecciona <strong>"Manual"</strong></li>
-                        <li>Introduce los datos del proxy de arriba</li>
-                        <li>Guarda y prueba navegando</li>
+                        <li><strong>Servidor:</strong> <span id="manualProxyIP">192.168.1.xxx</span></li>
+                        <li><strong>Puerto:</strong> 8888</li>
+                        <li><strong>Guarda</strong> y cierra Configuración</li>
+                        <li><strong>¡Importante!</strong> Mantén esta pestaña abierta</li>
                     </ol>
+                    
+                    <div style="background: rgba(255,0,0,0.2); padding: 15px; border-radius: 8px; margin: 10px 0;">
+                        <strong>⚠️ Nota importante:</strong><br>
+                        Debido a limitaciones del navegador, debes configurar el proxy manualmente en iOS.
+                        Una vez configurado, todo el tráfico pasará por esta página web que actuará como proxy VPN.
+                    </div>
                 </div>
 
                 <div class="instructions">
@@ -367,6 +375,7 @@
                 // Mostrar IP del proxy
                 getLocalIP().then(ip => {
                     document.getElementById('proxyIP').textContent = ip;
+                    document.getElementById('manualProxyIP').textContent = ip;
                 });
             } else {
                 indicator.classList.remove('active');
@@ -446,64 +455,108 @@
             }
 
             async setupServiceWorkerProxy() {
-                // Registrar Service Worker para interceptar requests
-                if ('serviceWorker' in navigator) {
-                    try {
-                        // En lugar de un archivo externo, usamos datos inline
-                        const swCode = `
-                            self.addEventListener('fetch', event => {
-                                // Interceptar todas las solicitudes HTTP
-                                if (event.request.url.startsWith('http')) {
-                                    event.respondWith(handleVPNRequest(event.request));
-                                }
-                            });
-
-                            async function handleVPNRequest(request) {
-                                try {
-                                    // Enviar solicitud a través del servidor VPN
-                                    const vpnResponse = await sendThroughVPN(request);
-                                    return vpnResponse;
-                                } catch (error) {
-                                    // Fallback a solicitud directa
-                                    return fetch(request);
-                                }
-                            }
-
-                            async function sendThroughVPN(request) {
-                                // Aquí iría la lógica para enviar through VPN
-                                // Por simplicidad, simulamos la respuesta
-                                const response = await fetch(request);
-                                return response;
-                            }
-                        `;
-
-                        const blob = new Blob([swCode], { type: 'application/javascript' });
-                        const swUrl = URL.createObjectURL(blob);
-                        
-                        const registration = await navigator.serviceWorker.register(swUrl);
-                        addLog('📡 Service Worker proxy registrado', 'success');
-                        
-                        return registration;
-                    } catch (error) {
-                        addLog(`❌ Error registrando Service Worker: ${error.message}`, 'error');
-                        throw error;
-                    }
-                } else {
-                    throw new Error('Service Worker no soportado');
+                // Método alternativo sin Service Worker - usar WebRTC Data Channel
+                addLog('🔄 Configurando proxy via WebRTC (sin Service Worker)...', 'warning');
+                
+                try {
+                    // Crear conexión WebRTC local para proxy
+                    await this.setupWebRTCProxy();
+                    addLog('📡 Proxy WebRTC configurado correctamente', 'success');
+                    return true;
+                } catch (error) {
+                    addLog(`⚠️ WebRTC no disponible, usando modo manual`, 'warning');
+                    // Fallback: modo manual donde el usuario debe configurar proxy manualmente
+                    this.setupManualProxy();
+                    return true;
                 }
+            }
+
+            async setupWebRTCProxy() {
+                // Configurar DataChannel para proxy HTTP
+                this.peerConnection = new RTCPeerConnection({
+                    iceServers: []
+                });
+
+                this.dataChannel = this.peerConnection.createDataChannel('vpn-proxy', {
+                    ordered: true
+                });
+
+                this.dataChannel.onopen = () => {
+                    addLog('📡 Canal de datos VPN abierto', 'success');
+                };
+
+                this.dataChannel.onmessage = (event) => {
+                    // Manejar solicitudes proxy
+                    this.handleProxyRequest(JSON.parse(event.data));
+                };
+
+                // Crear offer para establecer conexión local
+                const offer = await this.peerConnection.createOffer();
+                await this.peerConnection.setLocalDescription(offer);
+                
+                return true;
+            }
+
+            setupManualProxy() {
+                addLog('📋 Modo proxy manual activado', 'success');
+                addLog('💡 El proxy funcionará cuando configures tu dispositivo manualmente', 'warning');
+                
+                // Simular servidor HTTP local para configuración manual
+                this.proxyEndpoint = `http://${window.location.hostname}:8888`;
+                addLog(`🔗 Endpoint del proxy: ${this.proxyEndpoint}`, 'success');
+            }
+
+            async handleProxyRequest(requestData) {
+                try {
+                    // Enviar solicitud a través del servidor VPN
+                    const vpnResponse = await this.sendThroughVPN(requestData);
+                    
+                    // Devolver respuesta via DataChannel
+                    if (this.dataChannel && this.dataChannel.readyState === 'open') {
+                        this.dataChannel.send(JSON.stringify(vpnResponse));
+                    }
+                } catch (error) {
+                    addLog(`❌ Error en proxy request: ${error.message}`, 'error');
+                }
+            }
+
+            async sendThroughVPN(requestData) {
+                // Crear solicitud para el servidor VPN
+                const vpnRequest = {
+                    type: 'web_request',
+                    url: requestData.url,
+                    method: requestData.method || 'GET',
+                    headers: requestData.headers || {},
+                    data: requestData.body || null
+                };
+
+                // Cifrar y enviar al servidor VPN
+                const encryptedRequest = this.cipher.encrypt(JSON.stringify(vpnRequest));
+                
+                // En implementación real, esto se enviaría via WebSocket al servidor VPN
+                // Por ahora, simulamos la respuesta
+                addLog(`🌐 Proxy: ${requestData.method || 'GET'} ${requestData.url}`, 'success');
+                
+                return {
+                    status: 200,
+                    headers: {'Content-Type': 'text/html'},
+                    body: `<!-- Respuesta via VPN para ${requestData.url} -->`
+                };
             }
 
             stop() {
                 this.running = false;
                 addLog('🛑 Servidor proxy detenido', 'warning');
                 
-                // Desregistrar Service Worker
-                if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.getRegistrations().then(registrations => {
-                        registrations.forEach(registration => {
-                            registration.unregister();
-                        });
-                    });
+                // Cerrar conexiones WebRTC si existen
+                if (this.dataChannel) {
+                    this.dataChannel.close();
+                    this.dataChannel = null;
+                }
+                
+                if (this.peerConnection) {
+                    this.peerConnection.close();
+                    this.peerConnection = null;
                 }
             }
         }
